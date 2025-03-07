@@ -67,6 +67,17 @@ class APIClient:
         response = self.make_request("get", url)
         return response
 
+    def average(self, professor_id, module_code):
+        url = f"{self.base_url}/average/"
+
+        data = {
+            "professor_id": professor_id,
+            "module_code": module_code
+        }
+
+        response = self.make_request("post", url, json=data)
+        return response
+
     def make_request(self, method, url, **kwargs):
         start_time = time.time()
         
@@ -190,18 +201,7 @@ def list_modules(api_client):
         else:
             print("ERROR: Failed to retrieve modules")
 
-def rate_professor(api_client):
-    # Show available modules and professors first
-    list_modules(api_client)
-    
-    print("\nRate a professor:")
-    
-    # Simple gathering of input - server will validate
-    module_code = input("Enter module code: ")
-    year = input("Enter year (e.g., 2024): ")
-    semester = input("Enter semester (1 or 2): ")
-    professor_id = input("Enter professor ID: ")
-    stars = input("Rate professor (1-5 stars): ")
+def rate_professor(professor_id, module_code, year, semester, stars, api_client):
     
     # Convert inputs to proper types without validation
     try:
@@ -238,7 +238,6 @@ def rate_professor(api_client):
         print(f"ERROR: {error_message}")
 
 def view(api_client):
-    print("\nProfessor Ratings:")
     response = api_client.view()
 
     if response.get("status_code") == 200:
@@ -259,6 +258,27 @@ def view(api_client):
         else:
             print("ERROR: Failed to retrieve professor ratings")
 
+def average(professor_id, module_code, api_client):
+    response = api_client.average(professor_id, module_code)
+
+    if response.get("status_code") == 200:
+        display = response.get("data", {}).get("display")
+
+        if display:
+            print(display)
+        else:
+            print("Average rating not available")
+
+    else:
+        if "error" in response.get("data", {}):
+            err_msg = response.get("data", {}).get("error")
+            print(err_msg)
+        elif "error" in response:
+            err_msg = response.get("error")
+            print(err_msg)
+        else:
+            print("ERROR: Failed to retrieve professor average rating")
+
 def main():
     # Initialize API client
     api_client = APIClient(URL)
@@ -271,61 +291,76 @@ def main():
     
     while True:
         command = input("-> ")
-        command = command.strip().lower()
-        
-        if command in ["q", "quit", "exit"]:
+        command = command.split()
+
+        if command[0] in ["q", "quit", "exit"]:
             print("Goodbye!")
             break
+
+        elif command[0] == "list":
+            list_modules(api_client)
+
+        elif command[0] == "view":
+            view(api_client)
+
+        elif command[0] == "average":
+            if len(command) < 3:
+                print("Please use the command as following: 'average professor_id module_code'")
+            else:
+                average(command[1], command[2], api_client)
+
             
-        if not logged_in:
+        elif not logged_in:
             # Print help information
-            if command in ["h", "help"]:
+            if command[0] in ["h", "help"]:
                 print("Available commands:")
                 print("1) register: Register a new user")
                 print("2) login: Login using existing account")
                 print("3) list: List all modules and professors")
-                print("4) q/quit/exit: Exit the application")
+                print("4) view: List ratings of all professors")
+                print("5) average professor_id module_code: Display average rating for a professor in a module")
+                print("6) q/quit/exit: Exit the application")
 
             # Register new user
-            elif command == "register":
+            elif command[0] == "register":
                 success = register(api_client)
                 if not success:
                     print("Please login or try again")
 
-            elif command == "list":
-                list_modules(api_client)
-                
-            elif command == "login":
+            elif command[0] == "login":
                 success = login(api_client)
                 if success:
                     logged_in = True
-                    print("Type 'h' or 'help' for a list of logged-in commands.")
                 else:
                     print("Please try again or register")
-
-            elif command == "view":
-                view(api_client)
 
             else:
                 print("Invalid command: type 'h' or 'help' for a list of commands.")
 
         else:  # logged_in == True
             # Print help information
-            if command in ["h", "help"]:
+            if command[0] in ["h", "help"]:
                 print("Available commands:")
-                print("1) rate: Rate a professor for a specific module")
-                print("2) logout: Log out of your account")
-                print("3) q/quit/exit: Exit the application")
+                print("1) list: List all modules and professors")
+                print("2) average professor_id module_code: Display average rating for a professor in a module")
+                print("3) view: List ratings of all professors")
+                print("4) rate professor_id module_code year semester rating: Rate a professor for a specific module")
+                print("5) logout: Log out of your account")
+                print("6) q/quit/exit: Exit the application")
 
-            elif command == "logout":
+            elif command[0] == "logout":
                 logged_in = False
                 api_client.token = None
                 api_client.username = None
                 api_client.session.headers.pop("Authorization", None)
                 print("Successfully logged out")
 
-            elif command == "rate":
-                rate_professor(api_client)
+            elif command[0] == "rate":
+                if len(command) < 6:
+                    print("Please use the command as following: 'rate professor_id module_code year semester rating'")
+                else:
+
+                    rate_professor(command[1], command[2], command[3], command[4], command[5], api_client)
 
             else:
                 print("Invalid command: type 'h' or 'help' for a list of logged-in commands.")

@@ -317,3 +317,57 @@ def view(request):
         "professors": professor_ratings,
         "formatted_display": "\n".join(formatted_output)
     }, status=status.HTTP_200_OK) 
+
+@api_view(['POST'])
+def average(request):
+    data = request.data
+    prof_id = data.get("professor_id")
+    module_code = data.get("module_code")
+
+    if not prof_id:
+        return Response({"error": "Professor ID not provided"}, status=status.HTTP_400_BAD_REQUEST)
+    if not module_code:
+        return Response({"error": "Module code not provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        professor = Professor.objects.get(id=prof_id)
+    except Professor.DoesNotExist:
+        return Response({"error": f"Professor with ID {prof_id} not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        module = Module.objects.get(code=module_code)
+    except Module.DoesNotExist:
+        return Response({"error": f"Module with code {module_code} not found"}, status=status.HTTP_404_NOT_FOUND)
+     # Format professor name (initials + last name)
+    name_parts = professor.name.split()
+    formatted_name = ""
+    for part in name_parts[:-1]:
+        formatted_name += part[0] + ". "
+    formatted_name += name_parts[-1]
+
+    module_instances = Module_instance.objects.filter(mod=module)
+
+    avg_rating = 0
+    if module_instances:
+        sum_rating = 0
+        rating_count = 0
+        for module_instance in module_instances:
+            ratings = Rating.objects.filter(module=module_instance, professor=professor)
+            sum_rating += sum(rating.stars for rating in ratings)
+            rating_count += ratings.count()
+        avg_rating = round(sum_rating / rating_count)
+    else:
+        return Response(
+            {"display", f"Professor {formatted_name} ({prof_id}) does not teach {module.desc} ({module.code}"},
+            status=status.HTTP_200_OK
+        )
+    
+    if avg_rating == 0:
+        return Response(
+            {"display", f"Professor {formatted_name} ({prof_id}) has no ratings for {module.desc} ({module.code}"},
+            status=status.HTTP_200_OK
+        )
+   
+    output = f"The rating of Professor {formatted_name} ({prof_id}) in module {module.desc} ({module.code}) is:\n{"★" * avg_rating + '☆' * (5 - avg_rating)}"
+
+    return Response({"display": output}, status=status.HTTP_200_OK)
