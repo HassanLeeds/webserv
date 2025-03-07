@@ -62,6 +62,11 @@ class APIClient:
         response = self.make_request("post", url, json=data)
         return response
 
+    def view(self):
+        url = f"{self.base_url}/view/"
+        response = self.make_request("get", url)
+        return response
+
     def make_request(self, method, url, **kwargs):
         start_time = time.time()
         
@@ -232,6 +237,28 @@ def rate_professor(api_client):
             
         print(f"ERROR: {error_message}")
 
+def view(api_client):
+    print("\nProfessor Ratings:")
+    response = api_client.view()
+
+    if response.get("status_code") == 200:
+        formatted_display = response.get("data", {}).get("formatted_display")
+        
+        if formatted_display:
+            print(formatted_display)
+        else:
+            print("No professor ratings available")
+
+    else:
+        if "error" in response.get("data", {}):
+            err_msg = response.get("data", {}).get("error")
+            print(err_msg)
+        elif "error" in response:
+            err_msg = response.get("error")
+            print(err_msg)
+        else:
+            print("ERROR: Failed to retrieve professor ratings")
+
 def main():
     # Initialize API client
     api_client = APIClient(URL)
@@ -275,6 +302,10 @@ def main():
                     print("Type 'h' or 'help' for a list of logged-in commands.")
                 else:
                     print("Please try again or register")
+
+            elif command == "view":
+                view(api_client)
+
             else:
                 print("Invalid command: type 'h' or 'help' for a list of commands.")
 

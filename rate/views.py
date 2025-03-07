@@ -183,7 +183,7 @@ def rate_professor(request):
     # Validate input with detailed error messages
     if not prof_id:
         return Response({"error": "Professor ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     if not module_code:
         return Response({"error": "Module code is required"}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -268,3 +268,52 @@ def rate_professor(request):
         "message": f"Rating submitted successfully for Professor {professor.name}, Module {module.desc}",
         "formatted_confirmation": formatted_confirmation
     }, status=status.HTTP_201_CREATED)
+
+@api_view(["GET"])
+def view(request):
+    # Query all professors
+    professors = Professor.objects.all()
+    
+    professor_ratings = []
+    formatted_output = ["Professor Ratings:\n"]
+    
+    for professor in professors:
+        # Get all ratings for this professor
+        ratings = Rating.objects.filter(professor=professor)
+        
+        # Calculate average rating if there are any ratings
+        avg_rating = 0
+        if ratings.exists():
+            avg_rating = sum(rating.stars for rating in ratings) / ratings.count()
+        
+        # Round to nearest integer for display
+        display_stars = round(avg_rating)
+        
+        # Format professor name (initials + last name)
+        name_parts = professor.name.split()
+        formatted_name = ""
+        for part in name_parts[:-1]:
+            formatted_name += part[0] + ". "
+        formatted_name += name_parts[-1]
+        
+        # Store for API response
+        professor_ratings.append({
+            "id": professor.id,
+            "name": professor.name,
+            "formatted_name": formatted_name,
+            "average_rating": avg_rating,
+            "rating_count": ratings.count()
+        })
+        
+        # Add to formatted output
+
+        if avg_rating >=1:
+            star_display = "*" * display_stars
+            formatted_output.append(f"The rating of Professor {formatted_name} ({professor.id}) is {star_display}")
+        else:
+            formatted_output.append(f"Professor {formatted_name} ({professor.id}) doesn't have a rating")
+
+    return Response({
+        "professors": professor_ratings,
+        "formatted_display": "\n".join(formatted_output)
+    }, status=status.HTTP_200_OK) 
