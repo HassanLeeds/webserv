@@ -87,6 +87,21 @@ def login(request):
         else:
             return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
+@api_view(["DELETE"])
+def logout(request):
+    # Check if the user is authenticated
+    if not request.user.is_authenticated:
+        return Response({"error": "Not authenticated"}, status=status.HTTP_401_UNAUTHORIZED)
+
+    # Delete the user's token to invalidate it
+    from rest_framework.authtoken.models import Token
+    try:
+        token = Token.objects.get(user=request.user)
+        token.delete()
+        return Response({"message": "Token invalidated successfully"}, status=status.HTTP_204_NO_CONTENT)
+    except Token.DoesNotExist:
+        return Response({"error": "Token not found"}, status=status.HTTP_404_NOT_FOUND)
+
 @api_view(["GET"])
 def list_modules(request):
     # Query all module instances with their associated modules and professors

@@ -26,4 +26,5 @@ urlpatterns = [
     path('api/rate/', rate_professor),
     path('api/view/', view),
     path('api/average/', average),
+    path('api/logout/', logout),
 ]

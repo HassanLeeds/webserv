@@ -45,6 +45,18 @@ class APIClient:
 
         return response
 
+    def logout(self):
+        url = f"{self.base_url}/logout/"
+        response = self.make_request("delete", url)
+        
+        # Regardless of server response, clear local authentication data
+        self.token = None
+        self.username = None
+        if "Authorization" in self.session.headers:
+            self.session.headers.pop("Authorization")
+        
+        return response
+
     def list_modules(self):
         url = f"{self.base_url}/list/"
         response = self.make_request("get", url)
@@ -282,11 +294,11 @@ def rate_professor(professor_id, module_code, year, semester, stars, api_client)
 ╔══════════════════════════════════════════════════════════════════╗
 ║                       RATING SUBMITTED                           ║
 ╠══════════════════════════════════════════════════════════════════╣
-║ Professor: {professor.get('name', 'Unknown'):<46} ║
-║ Module:    {module.get('description', 'Unknown')[:44]:<46} ║
-║ Year:      {data.get('year', 'Unknown'):<46} ║
-║ Semester:  {data.get('semester', 'Unknown'):<46} ║
-║ Rating:    {'★' * stars_value + '☆' * (5 - stars_value):<46} ║
+║ Professor: {professor.get('name', 'Unknown'):<53} ║
+║ Module:    {module.get('description', 'Unknown')[:50]:<53} ║
+║ Year:      {data.get('year', 'Unknown'):<53} ║
+║ Semester:  {data.get('semester', 'Unknown'):<53} ║
+║ Rating:    {'★' * stars_value + '☆' * (5 - stars_value):<53} ║
 ╚══════════════════════════════════════════════════════════════════╝
 """
         print(formatted_confirmation)
@@ -472,18 +484,30 @@ def main():
                 print("5) logout: Log out of your account")
                 print("6) q/quit/exit: Exit the application")
 
+            
             elif command[0] == "logout":
+                response = api_client.logout()
+                
+                if response.get("status_code") in [200, 204]:
+                    print("Successfully logged out")
+                else:
+                    error_message = "Logout completed with warning"
+                    
+                    if isinstance(response.get('data'), dict) and 'error' in response.get('data', {}):
+                        error_message = response.get('data', {}).get('error')
+                    elif "error" in response:
+                        error_message = response.get('error')
+                        
+                    print(f"WARNING: {error_message}, but you've been logged out locally")
+                
                 logged_in = False
-                api_client.token = None
-                api_client.username = None
-                api_client.session.headers.pop("Authorization", None)
-                print("Successfully logged out")
 
             elif command[0] == "rate":
+
                 if len(command) < 6:
                     print("Please use the command as following: 'rate <professor_id> <module_code> <year> <semester> <rating>'")
+                
                 else:
-
                     rate_professor(command[1], command[2], command[3], command[4], command[5], api_client)
 
             else:
