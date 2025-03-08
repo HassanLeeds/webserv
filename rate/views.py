@@ -5,6 +5,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate
+from django.db.models import Q
 import re
 
 # Create your views here.
@@ -91,14 +92,8 @@ def list_modules(request):
     # Query all module instances with their associated modules and professors
     module_instances = Module_instance.objects.all().select_related('mod')
     
-    # Prepare the response data
+    # Prepare the response data - only raw data, no formatting
     module_list = []
-    formatted_output = ["Modules List:\n"]
-    
-    # Add header
-    header = "│ {:<10} │ {:<28} │ {:<6} │ {:<10} │ {:<35} │".format(
-        "Code", "Name", "Year", "Semester", "Taught by")
-    formatted_output.append(header)
     
     for instance in module_instances:
         # Get all professors teaching this module instance
@@ -114,57 +109,9 @@ def list_modules(request):
             "professors": prof_info
         }
         module_list.append(module_data)
-        
-        # Add separator line
-        formatted_output.append("-" * 105)
-        
-        code = instance.mod.code
-        desc = instance.mod.desc[:28]  # Truncate long descriptions
-        year = instance.year
-        sem = instance.sem
-        
-        if not professors:
-            # No professors for this module
-            row = "│ {:<10} │ {:<28} │ {:<6} │ {:<10} │ {:<35} │".format(
-                code, desc, year, sem, "No Professors")
-            formatted_output.append(row)
-        else:
-            # Process first professor
-            first_prof = professors[0]
-            first_prof_name = first_prof.name
-            first_prof_name_list = first_prof_name.split()
-            formatted_name = ""
-            
-            # Format professor name (first initials + last name)
-            for name in first_prof_name_list[:-1]:
-                formatted_name += name[0] + ". "
-            formatted_name += first_prof_name_list[-1]
-            
-            prof_str = f"{first_prof.id}, Professor {formatted_name}"
-            
-            # First row with module details and first professor
-            row = "│ {:<10} │ {:<28} │ {:<6} │ {:<10} │ {:<35} │".format(
-                code, desc, year, sem, prof_str[:35])
-            formatted_output.append(row)
-            
-            # Add additional professors on separate rows
-            for prof in professors[1:]:
-                prof_name = prof.name
-                prof_name_list = prof_name.split()
-                formatted_name = ""
-                
-                for name in prof_name_list[:-1]:
-                    formatted_name += name[0] + ". "
-                formatted_name += prof_name_list[-1]
-                
-                prof_str = f"{prof.id}, Professor {formatted_name}"
-                row = "│ {:<10} │ {:<28} │ {:<6} │ {:<10} │ {:<35} │".format(
-                    "", "", "", "", prof_str[:35])
-                formatted_output.append(row)
     
     return Response({
-        "modules": module_list,
-        "formatted_display": "\n".join(formatted_output)
+        "modules": module_list
     }, status=status.HTTP_200_OK)
 
 @api_view(["POST"])
@@ -244,29 +191,42 @@ def rate_professor(request):
             status=status.HTTP_404_NOT_FOUND
         )
     
+    # Check if the user has already rated this professor for this module instance
+    existing_rating = Rating.objects.filter(
+        user=request.user,
+        professor=professor,
+        module=module_instance
+    ).first()
+    
+    if existing_rating:
+        # User has already rated this professor for this module instance
+        return Response({
+            "error": f"You have already rated Professor {professor.name} for {module.desc} ({year}, semester {semester})",
+            "existing_rating": existing_rating.stars
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
     # Create the rating
     rating = Rating.objects.create(
         stars=stars,
         professor=professor,
-        module=module_instance
+        module=module_instance,
+        user=request.user
     )
     
-    # Prepare a formatted confirmation message
-    formatted_confirmation = f"""
-╔══════════════════════════════════════════════════════════════════╗
-║                       RATING SUBMITTED                           ║
-╠══════════════════════════════════════════════════════════════════╣
-║ Professor: {professor.name:<46} ║
-║ Module:    {module.desc[:44]:<46} ║
-║ Year:      {year:<46} ║
-║ Semester:  {semester:<46} ║
-║ Rating:    {'★' * stars + '☆' * (5 - stars):<46} ║
-╚══════════════════════════════════════════════════════════════════╝
-"""
-    
+    # Return raw data only, no formatting
     return Response({
-        "message": f"Rating submitted successfully for Professor {professor.name}, Module {module.desc}",
-        "formatted_confirmation": formatted_confirmation
+        "professor": {
+            "id": professor.id,
+            "name": professor.name
+        },
+        "module": {
+            "code": module.code,
+            "description": module.desc
+        },
+        "year": year,
+        "semester": semester,
+        "stars": stars,
+        "message": f"Rating submitted successfully for Professor {professor.name}, Module {module.desc}"
     }, status=status.HTTP_201_CREATED)
 
 @api_view(["GET"])
@@ -275,7 +235,6 @@ def view(request):
     professors = Professor.objects.all()
     
     professor_ratings = []
-    formatted_output = ["Professor Ratings:\n"]
     
     for professor in professors:
         # Get all ratings for this professor
@@ -286,36 +245,16 @@ def view(request):
         if ratings.exists():
             avg_rating = sum(rating.stars for rating in ratings) / ratings.count()
         
-        # Round to nearest integer for display
-        display_stars = round(avg_rating)
-        
-        # Format professor name (initials + last name)
-        name_parts = professor.name.split()
-        formatted_name = ""
-        for part in name_parts[:-1]:
-            formatted_name += part[0] + ". "
-        formatted_name += name_parts[-1]
-        
-        # Store for API response
+        # Store raw data for API response
         professor_ratings.append({
             "id": professor.id,
             "name": professor.name,
-            "formatted_name": formatted_name,
             "average_rating": avg_rating,
             "rating_count": ratings.count()
         })
-        
-        # Add to formatted output
-
-        if avg_rating >=1:
-            star_display = "*" * display_stars
-            formatted_output.append(f"The rating of Professor {formatted_name} ({professor.id}) is {star_display}")
-        else:
-            formatted_output.append(f"Professor {formatted_name} ({professor.id}) doesn't have a rating")
-
+    
     return Response({
-        "professors": professor_ratings,
-        "formatted_display": "\n".join(formatted_output)
+        "professors": professor_ratings
     }, status=status.HTTP_200_OK) 
 
 @api_view(['POST'])
@@ -338,36 +277,54 @@ def average(request):
         module = Module.objects.get(code=module_code)
     except Module.DoesNotExist:
         return Response({"error": f"Module with code {module_code} not found"}, status=status.HTTP_404_NOT_FOUND)
-     # Format professor name (initials + last name)
-    name_parts = professor.name.split()
-    formatted_name = ""
-    for part in name_parts[:-1]:
-        formatted_name += part[0] + ". "
-    formatted_name += name_parts[-1]
-
-    module_instances = Module_instance.objects.filter(mod=module)
-
-    avg_rating = 0
-    if module_instances:
-        sum_rating = 0
-        rating_count = 0
-        for module_instance in module_instances:
-            ratings = Rating.objects.filter(module=module_instance, professor=professor)
-            sum_rating += sum(rating.stars for rating in ratings)
-            rating_count += ratings.count()
-        avg_rating = round(sum_rating / rating_count)
-    else:
-        return Response(
-            {"display", f"Professor {formatted_name} ({prof_id}) does not teach {module.desc} ({module.code}"},
-            status=status.HTTP_200_OK
-        )
     
-    if avg_rating == 0:
-        return Response(
-            {"display", f"Professor {formatted_name} ({prof_id}) has no ratings for {module.desc} ({module.code}"},
-            status=status.HTTP_200_OK
-        )
-   
-    output = f"The rating of Professor {formatted_name} ({prof_id}) in module {module.desc} ({module.code}) is:\n{"★" * avg_rating + '☆' * (5 - avg_rating)}"
+    module_instances = Module_instance.objects.filter(mod=module)
+    
+    # Check if professor teaches this module
+    teaches_module = False
+    for module_instance in module_instances:
+        if module_instance.prof.filter(id=prof_id).exists():
+            teaches_module = True
+            break
+    
+    if not teaches_module and module_instances:
+        return Response({
+            "professor": {
+                "id": professor.id,
+                "name": professor.name
+            },
+            "module": {
+                "code": module.code,
+                "description": module.desc
+            },
+            "teaches_module": False,
+            "average_rating": None,
+            "rating_count": 0
+        }, status=status.HTTP_200_OK)
 
-    return Response({"display": output}, status=status.HTTP_200_OK)
+    # Calculate average rating
+    sum_rating = 0
+    rating_count = 0
+    
+    for module_instance in module_instances:
+        ratings = Rating.objects.filter(module=module_instance, professor=professor)
+        sum_rating += sum(rating.stars for rating in ratings)
+        rating_count += ratings.count()
+    
+    avg_rating = None
+    if rating_count > 0:
+        avg_rating = sum_rating / rating_count
+    
+    return Response({
+        "professor": {
+            "id": professor.id,
+            "name": professor.name
+        },
+        "module": {
+            "code": module.code,
+            "description": module.desc
+        },
+        "teaches_module": teaches_module,
+        "average_rating": avg_rating,
+        "rating_count": rating_count
+    }, status=status.HTTP_200_OK)
