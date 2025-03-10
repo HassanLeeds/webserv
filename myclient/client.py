@@ -316,7 +316,7 @@ def rate_professor(professor_id, module_code, year, semester, stars, api_client)
   Rating:    {'★' * rating + '☆' * (5 - rating):<50} 
 --------------------------------------------------------------------
 """
-        print(formatted_confirmation)
+        print(formatted_response)
     else:
         # Check for the specific case of an already existing rating
         if response.get("status_code") == 400 and "existing_rating" in response.get("data", {}):
@@ -490,9 +490,12 @@ def main():
                 if len(command) < 2:
                     print("Please use the command as following: 'login <URL>'")
                 else:
-                    success = login(command[1],api_client)
-                    if success:
-                        logged_in = True
+                    if command[2][-1] != "/"
+                        print("URL must end with a front slash '/'")
+                    else:
+                        success = login(command[1],api_client)
+                        if success:
+                            logged_in = True
 
             else:
                 print("Invalid command: type 'h' or 'help' for a list of logged-in commands.")
