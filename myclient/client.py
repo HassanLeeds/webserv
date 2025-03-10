@@ -7,6 +7,8 @@ import time
 
 URL = "http://127.0.0.1:8000/api"
 
+# APIClient class
+# Creates a client that communicates directly with the server
 class APIClient:
 
     def __init__(self, base_url=URL):
@@ -15,6 +17,7 @@ class APIClient:
         self.token = None
         self.username = None
 
+    # Function to send registration request to the server
     def register(self, username, email, password):
         url = f"{self.base_url}/register/"
         data = {
@@ -26,8 +29,8 @@ class APIClient:
         response = self.make_request("post", url, json=data)
         return response
     
-    def login(self, username, password):
-        url = f"{self.base_url}/login/"
+    # Function to send login request to the server
+    def login(self, url, username, password):
         data = {
             "username": username,
             "password": password
@@ -45,6 +48,7 @@ class APIClient:
 
         return response
 
+    # Function to send logout request to the server
     def logout(self):
         url = f"{self.base_url}/logout/"
         response = self.make_request("delete", url)
@@ -57,11 +61,13 @@ class APIClient:
         
         return response
 
+    # Function to send list request to the server
     def list_modules(self):
         url = f"{self.base_url}/list/"
         response = self.make_request("get", url)
         return response
     
+    # Function to send new rating request to the server
     def rate_professor(self, professor_id, module_code, year, semester, stars):
         url = f"{self.base_url}/rate/"
         data = {
@@ -74,11 +80,13 @@ class APIClient:
         response = self.make_request("post", url, json=data)
         return response
 
+    # Function to send view request to the server
     def view(self):
         url = f"{self.base_url}/view/"
         response = self.make_request("get", url)
         return response
 
+    # Function to send average request to the server
     def average(self, professor_id, module_code):
         url = f"{self.base_url}/average/"
 
@@ -90,8 +98,8 @@ class APIClient:
         response = self.make_request("post", url, json=data)
         return response
 
+    # Function that builds and sends requests and receives responses
     def make_request(self, method, url, **kwargs):
-        start_time = time.time()
         
         try:
             # If we have a token but it's not in headers yet, add it
@@ -99,10 +107,8 @@ class APIClient:
                 self.session.headers.update({"Authorization": f"Token {self.token}"})
                 
             response = self.session.request(method, url, **kwargs)
-            end_time = time.time()
             result = {
                 "status_code": response.status_code,
-                "response_time": round((end_time - start_time) * 1000, 2),  # ms
                 "headers": dict(response.headers),
             }
 
@@ -124,6 +130,7 @@ class APIClient:
                 "status_code": None
             }
 
+# Gets user input for registration and invokes APIClient registration function
 def register(api_client, verbose=False): 
     # Get user input
     username = input("Enter username: ")
@@ -131,13 +138,16 @@ def register(api_client, verbose=False):
     password = getpass.getpass("Enter password: ")
     confirm_password = getpass.getpass("Confirm password: ")
     
-    # Simple check for password match (this is still reasonable to do client-side)
+    # Make sure password inputs match
     if password != confirm_password:
         print("ERROR: Passwords do not match.")
         return False
     
-    # Test the actual registration
+    # Invoke registration request
     response = api_client.register(username, email, password)
+
+
+    # Handle all responses and errors
 
     if response.get("status_code") == 201:
         print(f"SUCCESS: {response.get('data', {}).get('message', 'Registration successful')}")
@@ -153,22 +163,20 @@ def register(api_client, verbose=False):
 
         print(f"ERROR: {error_message}")
 
-    if verbose:
-        print("\nDetails:")
-        print(f"  Response time: {response.get('response_time', 'N/A')} ms")
-        print(f"  Headers: {json.dumps(response.get('headers', {}), indent=2)}")
-
     return False
 
-def login(api_client, verbose=False): 
+# Gets user input for login and invokes APIClient login function
+def login(url, api_client): 
     username = input("Enter username: ")
     password = getpass.getpass("Enter password: ")
 
-    # Test the actual login
-    response = api_client.login(username, password)
+    # Invoke login request
+    response = api_client.login(username, password, url)
+
+    # Handle all responses and errors
 
     if response.get("status_code") == 200:
-        print(f"SUCCESS: {response.get('data', {}).get('message', 'Login successful')}")
+        print(f"{response.get('data', {}).get('message', 'Login successful')}")
         return True
     else:
         error_message = "Login failed"
@@ -181,32 +189,29 @@ def login(api_client, verbose=False):
 
         print(f"ERROR: {error_message}")
 
-    if verbose:
-        print("\nDetails:")
-        print(f"  Response time: {response.get('response_time', 'N/A')} ms")
-        print(f"  Headers: {json.dumps(response.get('headers', {}), indent=2)}")
-
     return False
 
+#  Invokes APIClient list function
 def list_modules(api_client):
     response = api_client.list_modules()
     
+    # Handle all responses and errors
     if response.get("status_code") == 200:
         modules = response.get("data", {}).get("modules", [])
         if not modules:
             print("No modules found")
         else:
-            # Format the module data for display (moved from server to client)
+            # Format the module data for user to see
             formatted_output = ["Modules List:\n"]
             
             # Add header
-            header = "│ {:<10} │ {:<28} │ {:<6} │ {:<10} │ {:<35} │".format(
+            header = "│ {:<8} │ {:<30} │ {:<4} │ {:<8} │ {:<40} │".format(
                 "Code", "Name", "Year", "Semester", "Taught by")
             formatted_output.append(header)
             
             for module in modules:
                 code = module["code"]
-                desc = module["description"][:28]  # Truncate long descriptions
+                desc = module["description"][:30]  # Truncate long descriptions
                 year = module["year"]
                 sem = module["semester"]
                 professors = module["professors"]
@@ -216,7 +221,7 @@ def list_modules(api_client):
                 
                 if not professors:
                     # No professors for this module
-                    row = "│ {:<10} │ {:<28} │ {:<6} │ {:<10} │ {:<35} │".format(
+                    row = "│ {:<8} │ {:<30} │ {:<4} │ {:<8} │ {:<40} │".format(
                         code, desc, year, sem, "No Professors")
                     formatted_output.append(row)
                 else:
@@ -226,7 +231,7 @@ def list_modules(api_client):
                     first_prof_name_list = first_prof_name.split()
                     formatted_name = ""
                     
-                    # Format professor name (first initials + last name)
+                    # Format professor name (initials + last name)
                     for name in first_prof_name_list[:-1]:
                         formatted_name += name[0] + ". "
                     formatted_name += first_prof_name_list[-1]
@@ -234,7 +239,7 @@ def list_modules(api_client):
                     prof_str = f"{first_prof['id']}, Professor {formatted_name}"
                     
                     # First row with module details and first professor
-                    row = "│ {:<10} │ {:<28} │ {:<6} │ {:<10} │ {:<35} │".format(
+                    row = "│ {:<8} │ {:<30} │ {:<4} │ {:<8} │ {:<40} │".format(
                         code, desc, year, sem, prof_str[:35])
                     formatted_output.append(row)
                     
@@ -264,17 +269,19 @@ def list_modules(api_client):
         else:
             print("ERROR: Failed to retrieve modules")
 
+# Invokes APIClient rate_professor function using data from arguments
 def rate_professor(professor_id, module_code, year, semester, stars, api_client):
     
-    # Convert inputs to proper types without validation
+    # Convert inputs to proper types
     try:
         year = int(year)
         semester = int(semester)
         stars = int(stars)
     except ValueError:
-        # Let the server handle the validation error
+        # Server handles validation errors
         pass
     
+    # Create resonse JSON
     response = api_client.rate_professor(
         professor_id=professor_id,
         module_code=module_code,
@@ -283,14 +290,15 @@ def rate_professor(professor_id, module_code, year, semester, stars, api_client)
         stars=stars
     )
     
+    # Handle resoponse messages and errors
     if response.get("status_code") == 201:
-        # Format the confirmation message on the client side
+        # Format the response for client to see 
         data = response.get("data", {})
         professor = data.get("professor", {})
         module = data.get("module", {})
-        stars_value = data.get("stars", 0)
+        rating = data.get("stars", 0)
         
-        formatted_confirmation = f"""
+        formatted_response = f"""
 ╔══════════════════════════════════════════════════════════════════╗
 ║                       RATING SUBMITTED                           ║
 ╠══════════════════════════════════════════════════════════════════╣
@@ -298,7 +306,7 @@ def rate_professor(professor_id, module_code, year, semester, stars, api_client)
 ║ Module:    {module.get('description', 'Unknown')[:50]:<53} ║
 ║ Year:      {data.get('year', 'Unknown'):<53} ║
 ║ Semester:  {data.get('semester', 'Unknown'):<53} ║
-║ Rating:    {'★' * stars_value + '☆' * (5 - stars_value):<53} ║
+║ Rating:    {'★' * rating + '☆' * (5 - rating):<53} ║
 ╚══════════════════════════════════════════════════════════════════╝
 """
         print(formatted_confirmation)
@@ -306,13 +314,11 @@ def rate_professor(professor_id, module_code, year, semester, stars, api_client)
         # Check for the specific case of an already existing rating
         if response.get("status_code") == 400 and "existing_rating" in response.get("data", {}):
             existing_rating = response.get("data", {}).get("existing_rating", 0)
-            error_message = response.get("data", {}).get("error", "You have already rated this professor")
+            error_message = response.get("data", {}).get("error", "You have already rated this professor in this module instance")
             
             print(f"ERROR: {error_message}")
             print(f"Your previous rating: {'★' * existing_rating + '☆' * (5 - existing_rating)}")
             
-            # Ask if the user wants to update their rating (could be implemented in the future)
-            print("Note: If you wish to change your rating, this feature is not yet implemented.")
         else:
             error_message = "Rating submission failed"
             
@@ -323,16 +329,19 @@ def rate_professor(professor_id, module_code, year, semester, stars, api_client)
                 
             print(f"ERROR: {error_message}")
 
+# Invokes APIClient view function
 def view(api_client):
+    # Invike view request
     response = api_client.view()
 
+    # Handle all responses and error messages
     if response.get("status_code") == 200:
         professors = response.get("data", {}).get("professors", [])
         
         if not professors:
             print("No professor ratings available")
         else:
-            # Format the professor ratings on the client side
+            # Format the professor ratings for the user to see
             formatted_output = ["Professor Ratings:\n"]
             
             for professor in professors:
@@ -350,10 +359,10 @@ def view(api_client):
                 prof_id = professor.get("id", "")
                 
                 # Round to nearest integer for display
-                display_stars = round(avg_rating)
+                rounded_rating = round(avg_rating)
                 
                 if rating_count > 0:
-                    star_display = "*" * display_stars
+                    star_display = f"{'★' * rounded_rating + '☆' * (5 - rounded_rating):<53}" 
                     formatted_output.append(f"The rating of Professor {formatted_name} ({prof_id}) is {star_display}")
                 else:
                     formatted_output.append(f"Professor {formatted_name} ({prof_id}) doesn't have a rating")
@@ -369,9 +378,12 @@ def view(api_client):
         else:
             print("ERROR: Failed to retrieve professor ratings")
 
+# Invokes APIClient average function using arguments
 def average(professor_id, module_code, api_client):
+    # Invoke average request
     response = api_client.average(professor_id, module_code)
 
+    # Handle all response messages and errors
     if response.get("status_code") == 200:
         data = response.get("data", {})
         professor = data.get("professor", {})
@@ -413,7 +425,7 @@ def average(professor_id, module_code, api_client):
             print("ERROR: Failed to retrieve professor average rating")
 
 def main():
-    # Initialize API client
+    # Initialize API client object
     api_client = APIClient(URL)
 
     print("Welcome to the professor rating client!\n")
@@ -422,8 +434,11 @@ def main():
     print("Type 'h' or 'help' for a list of available commands.\n")
     logged_in = False
     
+    # Keep running until loop breaks
     while True:
         command = input("-> ")
+
+        # Divide command into seperate arguments
         command = command.split()
         
         if not command:
@@ -433,6 +448,7 @@ def main():
             print("Goodbye!")
             break
 
+        # List, view and average commands work whether logged in or out
         elif command[0] == "list":
             list_modules(api_client)
 
@@ -464,11 +480,14 @@ def main():
                     print("Please login or try again")
 
             elif command[0] == "login":
-                success = login(api_client)
-                if success:
-                    logged_in = True
+                if len(command) < 2:
+                    print("Please use the command as following: 'login <URL>'")
                 else:
-                    print("Please try again or register")
+                    success = login(command[1],api_client)
+                    if success:
+                        logged_in = True
+                    else:
+                        print("Please try again or register")
 
             else:
                 print("Invalid command: type 'h' or 'help' for a list of logged-in commands.")

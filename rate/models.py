@@ -3,8 +3,8 @@ from django.contrib.auth.models import User
 
 # Create your models here.
 class Professor (models.Model):
-    id = models.CharField(unique=True, max_length = 10, primary_key=True)
-    name = models.CharField(max_length = 30)
+    id = models.CharField(unique=True, max_length = 8, primary_key=True)
+    name = models.CharField(max_length = 40)
     
     def __str__ (self):
         return self.name
