@@ -37,8 +37,11 @@ class APIClient:
         }
 
         response = self.make_request("post", url, json=data)
-
-        token = response.get("data", {}).get("token")
+        
+        try:
+            token = response.get("data", {}).get("token")
+        except AttributeError:
+            token = None
 
         if token:
             self.token = token
@@ -171,13 +174,17 @@ def login(url, api_client):
     password = getpass.getpass("Enter password: ")
 
     # Invoke login request
-    response = api_client.login(username, password, url)
+    response = api_client.login(url, username, password)
 
     # Handle all responses and errors
 
     if response.get("status_code") == 200:
         print(f"{response.get('data', {}).get('message', 'Login successful')}")
         return True
+    elif response.get("status_code") == 404:
+        print("URL not found, please check for any spellig mistakes")
+    elif response.get("status_code") == 500:
+        print("URL must end with a front slash '/'")
     else:
         error_message = "Login failed"
 
@@ -254,7 +261,7 @@ def list_modules(api_client):
                         formatted_name += prof_name_list[-1]
                         
                         prof_str = f"{prof['id']}, Professor {formatted_name}"
-                        row = "│ {:<10} │ {:<28} │ {:<6} │ {:<10} │ {:<35} │".format(
+                        row = "│ {:<8} │ {:<30} │ {:<4} │ {:<8} │ {:<40} │".format(
                             "", "", "", "", prof_str[:35])
                         formatted_output.append(row)
             
@@ -299,15 +306,15 @@ def rate_professor(professor_id, module_code, year, semester, stars, api_client)
         rating = data.get("stars", 0)
         
         formatted_response = f"""
-╔══════════════════════════════════════════════════════════════════╗
-║                       RATING SUBMITTED                           ║
-╠══════════════════════════════════════════════════════════════════╣
-║ Professor: {professor.get('name', 'Unknown'):<53} ║
-║ Module:    {module.get('description', 'Unknown')[:50]:<53} ║
-║ Year:      {data.get('year', 'Unknown'):<53} ║
-║ Semester:  {data.get('semester', 'Unknown'):<53} ║
-║ Rating:    {'★' * rating + '☆' * (5 - rating):<53} ║
-╚══════════════════════════════════════════════════════════════════╝
+--------------------------------------------------------------------
+                       RATING SUBMITTED                           
+--------------------------------------------------------------------
+  Professor: {professor.get('name', 'Unknown'):<50} 
+  Module:    {module.get('description', 'Unknown')[:49]:<50} 
+  Year:      {data.get('year', 'Unknown'):<50} 
+  Semester:  {data.get('semester', 'Unknown'):<50} 
+  Rating:    {'★' * rating + '☆' * (5 - rating):<50} 
+--------------------------------------------------------------------
 """
         print(formatted_confirmation)
     else:
@@ -486,8 +493,6 @@ def main():
                     success = login(command[1],api_client)
                     if success:
                         logged_in = True
-                    else:
-                        print("Please try again or register")
 
             else:
                 print("Invalid command: type 'h' or 'help' for a list of logged-in commands.")
